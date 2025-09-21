@@ -1,12 +1,20 @@
 import psycopg2
-from api_request import mock_fetch_data
+from api_request import fetch_data
 
 def connect_to_db():
     print("Connecting to PostgreSQL database...")
     try:
         conn = psycopg2.connect(
-            host="localhost",
-            port="5000",
+            # Nếu chạy file này độc lập, thì hãy xài config này
+            # host="localhost",
+            # port="5000",
+            # dbname="weather_db",
+            # user="admin",
+            # password="admin"
+            
+            # Nếu chạy file này trong Airflow container, thì hãy xài config này
+            host="db",
+            port="5432",
             dbname="weather_db",
             user="admin",
             password="admin"
@@ -67,7 +75,7 @@ def insert_record(conn: psycopg2.extensions.connection, record: dict):
 def main():
     try:
         conn = connect_to_db()
-        data = mock_fetch_data()
+        data = fetch_data()
         create_table(conn)
         insert_record(conn, data)
     except Exception as e:

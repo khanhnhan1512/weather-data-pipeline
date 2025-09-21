@@ -1,3 +1,13 @@
+x-superset-user: &superset-user root
+x-superset-volumes: &superset-volumes
+  # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+  - ./docker:/app/docker
+  # - ./superset:/app/superset
+  - ./docker/superset_config.py:/app/pythonpath/superset_config.py
+  # - ./superset-frontend:/app/superset-frontend
+  # - superset_home:/app/superset_home
+  # - ./tests:/app/tests
+
 services:
   db:
     container_name: postgres_container
@@ -11,6 +21,7 @@ services:
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
       - ./postgres/airflow_init.sql:/docker-entrypoint-initdb.d/airflow_init.sql
+      - ./postgres/superset_init.sql:/docker-entrypoint-initdb.d/superset_init.sql
     networks:
       - my-network
 
@@ -22,7 +33,11 @@ services:
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow_db
     volumes:
-      - /airflow/dags:/opt/airflow/dags
+      - ./airflow/dags:/opt/airflow/dags
+      - ./api-request/src:/opt/airflow/api-request/src
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add: # use command `stat -c "%g" /var/run/docker.sock` to get the group id of docker.sock
+      - 1001
     depends_on:
       - db
     networks:
@@ -30,6 +45,100 @@ services:
     command: >
       bash -c "airflow db migrate && airflow standalone"
 
+  # dbt_init:
+  #   container_name: dbt_container
+  #   image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+  #   volumes:
+  #     - ./dbt:/usr/app
+  #     # - ./dbt/my_project:/usr/app
+  #     # - ./dbt:/root/.dbt
+  #   working_dir: /usr/app
+  #   environment:
+  #     DBT_PROFILES_DIR: "/root/.dbt"
+  #   depends_on:
+  #     - db
+  #   networks:
+  #     - my-network
+  #   command: init my_project   # use this to create a new dbt project
+  #   # command: debug # use this to test the connection
+  #   # command: run # use this to run the dbt models
+
+  # dbt:
+  #   container_name: dbt_container
+  #   image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+  #   volumes:
+  #     # - ./dbt:/usr/app
+  #     - ./dbt/my_project:/usr/app
+  #     - ./dbt:/root/.dbt
+  #   working_dir: /usr/app
+  #   environment:
+  #     DBT_PROFILES_DIR: "/root/.dbt"
+  #   depends_on:
+  #     - db
+  #   networks:
+  #     - my-network
+  #   # command: init my_project   # use this to create a new dbt project
+  #   # command: debug # use this to test the connection
+  #   command: run # use this to run the dbt models
+
+  superset:
+    env_file:
+      - ./docker/.env
+    image: apache/superset:3.0.0-py310
+    container_name: superset_app
+    command: ["/app/docker/docker-bootstrap.sh", "app"]
+    restart: unless-stopped
+    ports:
+      - 8088:8088
+    user: *superset-user
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    volumes: *superset-volumes
+    environment:
+      # SUPERSET_LOAD_EXAMPLES: "no"
+      SUPERSET__SQLALCHEMY_EXAMPLES_URI: "postgresql+psycopg2://examples:examples@db:5432/examples_db"
+    networks:
+      - my-network
+      
+  superset-init:
+    # build:
+    #   <<: *common-build
+    image: apache/superset:3.0.0-py310
+    container_name: superset_init
+    command: ["/app/docker/docker-init.sh"]
+    env_file:
+      - docker/.env
+    depends_on:
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    user: *superset-user
+    volumes: *superset-volumes
+    environment:
+      SUPERSET__SQLALCHEMY_EXAMPLES_URI: "postgresql+psycopg2://examples:examples@db:5432/examples_db"
+    healthcheck:
+      disable: true
+    networks:
+      - my-network
+
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+    networks:
+      - my-network
+
+
 networks:
   my-network:
     driver: bridge
+
+volumes:
+  redis:
+    external: false

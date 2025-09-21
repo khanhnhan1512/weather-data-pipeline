@@ -1,1 +1,2 @@
 # weather-data-pipeline
+- Lúc build docker cho `dbt`, thì cần `db init` trước, sau đó cần thay đổi volumes để map tới file `dbt_project.yml` và đồng thời sau đó chạy `docker cp <container_id>:./root/.dbt/profiles.yml ./` để copy file `profiles.yml` từ trong container ra ngoài thư mục `dbt`, sau đó cũng cần map tới file này.

@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/__init__.py
+src/api_request.py
+src/insert_records.py
+src/api_request.egg-info/PKG-INFO
+src/api_request.egg-info/SOURCES.txt
+src/api_request.egg-info/dependency_links.txt
+src/api_request.egg-info/top_level.txt
